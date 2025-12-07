@@ -1,0 +1,190 @@
+---
+title: "Code"
+code-fold: false
+code-tools: false
+---
+```{r}
+library(tidyverse)  
+library(lubridate)   
+library(plotly)      
+covid19 <- read.csv("/Users/gongxinyu/Downloads/national-history.csv")
+```
+
+```{r}
+#| eval: false
+#| include: false
+dim(covid19)
+table(covid19$date)
+head(covid19)
+tail(covid19)
+table(covid19$states)
+table(covid19$positive)
+glimpse(covid19)
+summary(covid19)
+```
+
+```{r}
+covid <- covid19 %>%
+  mutate(date = as_date(date))%>%
+  arrange(date) %>%
+  filter(totalTestResults > 0 | positive > 0)
+covid <- covid %>%
+  mutate(
+    new_cases = positiveIncrease,
+    new_tests = totalTestResultsIncrease,
+    new_deaths = deathIncrease
+  ) %>%
+  arrange(date)
+covid <- covid %>%
+  filter(
+    !is.na(new_cases),
+    !is.na(new_tests),
+    !is.na(new_deaths)
+  )
+covid
+```
+
+```{r}
+covid_long <- covid %>%
+  select(date, new_cases, new_deaths,
+         hospitalizedCurrently, new_tests) %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = recode(
+      metric,
+      new_cases = "New Cases",
+      new_deaths = "New Deaths",
+      hospitalizedCurrently = "Hospitalized Currently",
+      new_tests = "New Tests"
+    )
+  )
+
+# Single ggplot with four lines
+p_all <- ggplot(covid_long, aes(x = date, y = value, color = metric)) +
+  geom_line() +
+  scale_y_continuous() +   # nicer y-axis labels
+  labs(
+    title = "US COVID-19 Trends: Cases, Deaths, Hospitalizations, and Testing (2020–2021)",
+    x = "Date",
+    y = "Count",
+    color = "Metric"
+  ) +
+  theme_minimal()
+
+# Make it interactive
+ggplotly(p_all)
+```
+
+```{r}
+# 1. Scale each metric to its own maximum
+covid_scaled <- covid %>%
+  mutate(
+    new_cases_scaled   = new_cases / max(new_cases, na.rm = TRUE),
+    new_deaths_scaled  = new_deaths / max(new_deaths, na.rm = TRUE),
+    hosp_scaled        = hospitalizedCurrently / max(hospitalizedCurrently, na.rm = TRUE),
+    new_tests_scaled   = new_tests / max(new_tests, na.rm = TRUE)
+  )
+
+# 2. Put into long format
+covid_long_scaled <- covid_scaled %>%
+  select(date, new_cases_scaled, new_deaths_scaled,
+         hosp_scaled, new_tests_scaled) %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = recode(
+      metric,
+      new_cases_scaled  = "New Cases",
+      new_deaths_scaled = "New Deaths",
+      hosp_scaled       = "Hospitalized Currently",
+      new_tests_scaled  = "New Tests"
+    )
+  )
+
+# 3. One combined ggplot
+p_scaled <- ggplot(covid_long_scaled, aes(x = date, y = value, color = metric)) +
+  geom_line() +
+  labs(
+    title = "US COVID-19 Trends (Scaled to Each Metric's Maximum)",
+    x = "Date",
+    y = "Relative Level (0–1, scaled to each metric's peak)",
+    color = "Metric"
+  ) +
+  theme_minimal()
+
+ggplotly(p_scaled)
+```
+
+```{r}
+peak_cases <- covid[which.max(covid$new_cases), ]
+peak_deaths <- covid[which.max(covid$new_deaths), ]
+peak_hosp <- covid[which.max(covid$hospitalizedCurrently), ]
+peak_tests <- covid[which.max(covid$new_tests), ]
+
+peak_table <- tibble(
+  metric = c("New Cases", "New Deaths", "Hospitalizations", "New Tests"),
+  peak_value = c(
+    peak_cases$new_cases,
+    peak_deaths$new_deaths,
+    peak_hosp$hospitalizedCurrently,
+    peak_tests$new_tests
+  ),
+  peak_date = c(
+    peak_cases$date,
+    peak_deaths$date,
+    peak_hosp$date,
+    peak_tests$date
+  )
+)
+peak_table
+```
+
+```{r}
+library(reshape2)
+
+cor_data <- covid %>%
+  select(new_cases, new_tests, new_deaths, hospitalizedCurrently) %>%
+  drop_na()
+
+cor_mat <- cor(cor_data)
+
+ggplot(melt(cor_mat), aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 4) +
+  scale_fill_gradient2(
+    low = "#4575b4", high = "#d73027", mid = "white",
+    midpoint = 0, limits = c(-1, 1)
+  ) +
+  labs(
+    title = "Correlation Matrix of Key COVID-19 Metrics National-level",
+    x = "", y = ""
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+ggplot(covid, aes(x = new_cases, y = hospitalizedCurrently)) +
+  geom_point(alpha = 0.35, color = "purple") +
+  geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 1.2) +
+  labs(
+    title = "Phase Diagram: New Cases vs. Hospitalizations",
+    x = "New Cases",
+    y = "Hospitalized Currently"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+
+
+
+
+
+

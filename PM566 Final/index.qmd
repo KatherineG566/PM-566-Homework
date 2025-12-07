@@ -1,0 +1,237 @@
+---
+title: "U.S. COVID-19 Testing and Outcomes, 2020–2021"
+author: "Katherine"
+format:
+  html:
+    embed-resources: true
+fig-width: 8
+fig-height: 8
+---
+
+## **Introduction**
+
+In this project, I use the COVID Tracking Project–style national dataset, which provides daily counts of confirmed and probable COVID-19 cases, COVID-19 deaths (confirmed and probable), individual current hospitalized with COVID-19, total viral test result (PCR) and daily increases in test results, and other related metrics like ICU and ventilator counts. The dataset contains 420 observations (rows) and 17 variables (columns). The dataset is collected from January 03, 2020 through March 7, 2021, which spans the earliest and largest initial waves of COVID-19 in the United States. These data are useful for identifying when major “peaks” of the pandemic occurred, examining whether case counts eventually declined, and understanding how testing and severe outcomes evolved over time. In particular, this dataset can help us describe how the first year of the COVID-19 pandemic affected the United States at the national level.
+
+**Main Question** During the first year of the U.S. COVID-19 pandemic (January 2020–March 2021), how did increases in national testing volume relate to the number of new cases detected, and how were testing, hospitalizations, and deaths connected—specifically, did greater testing and changing case counts correspond to changes in hospitalization burden and death rates?
+
+```{r}
+library(tidyverse)  
+library(lubridate)   
+library(plotly)      
+```
+
+```{r}
+covid19 <- read.csv("/Users/gongxinyu/Downloads/national-history.csv")
+```
+
+## **Methods**
+
+**Data Acquisition:**
+
+The dataset was downloaded from the COVID Tracking Project and contains one CSV file, and the CSV file was read into R with 420 rows and 17 variables. Each row represents a single day and includes national totals.
+
+**Data Cleaning**
+
+After importing the national COVID-19 dataset, I first inspected the head and tail of the file and observed that the earliest records contained zero or missing values for cases and testing. Although these entries are valid (reflecting the period before COVID-19 testing and confirmed cases existed), they do not contribute meaningful information to the analyses. Therefore, I arranged the data in chronological order and filtered out rows where total test results or positive cases were less than or equal to zero. After this cleaning step, the first recorded COVID-19 case in the U.S. appeared on 2020-01-19—six days after the earliest observation in the file (2020-01-13).
+
+A summary of the dataset revealed that negativeIncrease and hospitalizedIncrease were the only daily variables containing negative values. This is expected because: negativeIncrease = negative_today − negative_yesterday, which can be negative if a state reports fewer negative PCR results on a given day than the day before. hospitalizedIncrease can also be negative if the number of currently hospitalized patients decreases. In contrast, daily increases for positive cases (positiveIncrease) and deaths (deathIncrease) are derived from cumulative totals, which rarely decrease. As a result, these variables tend to have minimum values of zero rather than negative numbers.
+
+To address my primary research question regarding how testing volume relates to cases, hospitalizations, and deaths, I created three new variables: **new_cases (from positiveIncrease)** and **new_tests (from totalTestResultsIncrease)** and **new_deaths (from deathIncrease)**. These variables represent the daily counts of new cases, new tests, and new deaths and form the foundation for all subsequent trend and correlation analyses.
+
+The initial interactive plot of the raw (non-scaled) metrics showed that testing volumes were many times larger than the other indicators, making visual comparisons difficult. To ensure all indicators were comparable on a single plot, I applied a simple normalization transformation: **scaled value = original value/maximum value of that metric**. This scaling procedure places all variables on a 0–1 scale, allowing their patterns and timing to be directly compared. The scaled figure clearly reveals synchronized national wave patterns across new tests, new cases, hospitalizations, and deaths. A correlation matrix further quantifies these relationships and demonstrates how closely these indicators moved together during the first year of the pandemic.
+
+**Tools used**
+
+**tidyverse:** for general data handling, including reading the dataset, cleaning variables, transforming data, and organizing it for analysis. (Includes packages: ggplot2, dplyr, etc.)
+
+**lubridate:** Used for working with dates, such as converting the raw date column into a proper Date format and arranging observations in chronological order.
+
+**plotly:** for interactive visualization, allowing hovering, zooming, and dynamic viewing of trends.
+
+**maps:** for creating choropleth maps to visualize state-level COVID-19 testing, cases, and positivity.
+
+**reshape2:** for reshaping data to create matrix-style visualizations such as heatmaps.
+
+For any exploratory tables on details of the data, please check out the **About the Data** page.
+
+## Results
+
+```{r}
+covid <- covid19 %>%
+  mutate(date = as_date(date))%>%
+  arrange(date) %>%
+  filter(totalTestResults > 0 | positive > 0)
+covid <- covid %>%
+  mutate(
+    new_cases = positiveIncrease,
+    new_tests = totalTestResultsIncrease,
+    new_deaths = deathIncrease
+  ) %>%
+  arrange(date)
+covid <- covid %>%
+  filter(
+    !is.na(new_cases),
+    !is.na(new_tests),
+    !is.na(new_deaths)
+  )
+```
+
+```{r}
+covid_long <- covid %>%
+  select(date, new_cases, new_deaths,
+         hospitalizedCurrently, new_tests) %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = recode(
+      metric,
+      new_cases = "New Cases",
+      new_deaths = "New Deaths",
+      hospitalizedCurrently = "Hospitalized Currently",
+      new_tests = "New Tests"
+    )
+  )
+
+# Single ggplot with four lines
+p_all <- ggplot(covid_long, aes(x = date, y = value, color = metric)) +
+  geom_line() +
+  scale_y_continuous() +   # nicer y-axis labels
+  labs(
+    title = "US COVID-19 Trends: Cases, Deaths, Hospitalizations, and Testing (2020–2021)",
+    x = "Date",
+    y = "Count",
+    color = "Metric"
+  ) +
+  theme_minimal()
+
+# Make it interactive
+ggplotly(p_all)
+```
+
+```{r}
+# 1. Scale each metric to its own maximum
+covid_scaled <- covid %>%
+  mutate(
+    new_cases_scaled   = new_cases / max(new_cases, na.rm = TRUE),
+    new_deaths_scaled  = new_deaths / max(new_deaths, na.rm = TRUE),
+    hosp_scaled        = hospitalizedCurrently / max(hospitalizedCurrently, na.rm = TRUE),
+    new_tests_scaled   = new_tests / max(new_tests, na.rm = TRUE)
+  )
+
+# 2. Put into long format
+covid_long_scaled <- covid_scaled %>%
+  select(date, new_cases_scaled, new_deaths_scaled,
+         hosp_scaled, new_tests_scaled) %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "metric",
+    values_to = "value"
+  ) %>%
+  mutate(
+    metric = recode(
+      metric,
+      new_cases_scaled  = "New Cases",
+      new_deaths_scaled = "New Deaths",
+      hosp_scaled       = "Hospitalized Currently",
+      new_tests_scaled  = "New Tests"
+    )
+  )
+
+# 3. One combined ggplot
+p_scaled <- ggplot(covid_long_scaled, aes(x = date, y = value, color = metric)) +
+  geom_line() +
+  labs(
+    title = "US COVID-19 Trends (Scaled to Each Metric's Maximum)",
+    x = "Date",
+    y = "Relative Level (0–1, scaled to each metric's peak)",
+    color = "Metric"
+  ) +
+  theme_minimal()
+
+ggplotly(p_scaled)
+```
+
+**The purple line (new tests) rises sharply before the winter surge. New cases (green) rise first,following by hospitalizations (red) peak shortly after then deaths (blue) peak last. Winter 2020–2021 was the most severe period across all indicators. Every metric reaches its scaled peak (1.0) around December 2020–January 2021.**
+
+```{r}
+peak_cases <- covid[which.max(covid$new_cases), ]
+peak_deaths <- covid[which.max(covid$new_deaths), ]
+peak_hosp <- covid[which.max(covid$hospitalizedCurrently), ]
+peak_tests <- covid[which.max(covid$new_tests), ]
+
+peak_table <- tibble(
+  metric = c("New Cases", "New Deaths", "Hospitalizations", "New Tests"),
+  peak_value = c(
+    peak_cases$new_cases,
+    peak_deaths$new_deaths,
+    peak_hosp$hospitalizedCurrently,
+    peak_tests$new_tests
+  ),
+  peak_date = c(
+    peak_cases$date,
+    peak_deaths$date,
+    peak_hosp$date,
+    peak_tests$date
+  )
+)
+peak_table
+```
+
+**The peak of new cases is at 2021-01-08 and the total new cases is 295,121. The peak of new deaths is 2021-02-12 with 5,427 deaths. The peak of current hospitalizations are 132,474 at 2021-01-06. The new test taking the largest lead has 2,309,884 tests at 2021-01-15.**
+
+```{r}
+library(reshape2)
+
+cor_data <- covid %>%
+  select(new_cases, new_tests, new_deaths, hospitalizedCurrently) %>%
+  drop_na()
+
+cor_mat <- cor(cor_data)
+
+ggplot(melt(cor_mat), aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 4) +
+  scale_fill_gradient2(
+    low = "#4575b4", high = "#d73027", mid = "white",
+    midpoint = 0, limits = c(-1, 1)
+  ) +
+  labs(
+    title = "Correlation Matrix of Key COVID-19 Metrics National-level",
+    x = "", y = ""
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**New cases are highly correlated with testing volume (r = 0.87). This strong positive relationship so as testing volume increased, more cases were detected. New cases and current hospitalizations are extremely correlated (r = 0.90). This is one of the strongest relationships in the matrix. When cases rose, hospitalizations rose shortly after. Deaths correlate moderately with cases (r = 0.64) and strongly with hospitalizations (r = 0.74). Testing correlates with hospitalizations (r = 0.75) and deaths (r = 0.55). Testing alone is not a strong predictor of mortality—clinical severity matters more.**
+
+```{r}
+ggplot(covid, aes(x = new_cases, y = hospitalizedCurrently)) +
+  geom_point(alpha = 0.35, color = "purple") +
+  geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 1.2) +
+  labs(
+    title = "Phase Diagram: New Cases vs. Hospitalizations",
+    x = "New Cases",
+    y = "Hospitalized Currently"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+**The diagram shows a strong, nonlinear positive relationship: as new cases increase, hospitalizations also rise, especially during major surges. At lower case levels, hospitalizations increase gradually, but beyond roughly 50,000–100,000 new cases per day, the number of hospitalized patients climbs steeply.**
+
+## **Conclusion & Summary**
+
+This analysis examined how national COVID-19 testing volume, new case counts, hospitalizations, and deaths evolved during the first year of the U.S. pandemic (January 2020–March 2021), and how these indicators related to each other over time. Using national-level daily data, visualizations and correlation analyses revealed clear and consistent relationships among disease transmission, testing behavior, and clinical severity.
+
+The U.S. experienced a spring 2020 wave (2020-03-14 to 2020-08-16) and a much larger winter 2020-2021 wave (2020-12-01 TO 2021-03-08) based on the paper "COVID-19 pandemic waves: Identification and interpretation of global data" by Heliyon in 2024. The time-series trends showed that all four indicators followed a two-wave pattern, with a smaller spring 2020 wave and a much larger and more severe winter 2020–2021 wave. Testing volume rose rapidly during both waves and consistently increased ahead of rising case counts, suggesting that expanded testing capacity and demand contributed to improved detection of infections. This pattern supports the central research question, as higher testing volume was closely associated with increased identification of new cases.
+
+Hospitalizations and deaths followed increases in new cases with predictable delays (1-3 weeks), reflecting the clinical progression of COVID-19 from infection to symptomatic disease, severe illness, and mortality. The strongest alignment occurred during the winter 2020–2021 surge, where all indicators reached their scaled peaks and the healthcare system experienced the greatest burden. This indicates that many deaths occur among already-hospitalized patients and high hospitalization burden is a strong indicator of increasing mortality. Correlation analyses further confirmed these relationships, showing strong positive associations between cases, testing volume, and hospitalizations, as well as between hospitalizations and deaths during the first year of pandemic.
+
+After the largest peak, declines occurred simultaneously after January 2021, with cases, tests, hospitalizations, and deaths all falling together. This decline may be attributed to the rollout of the Pfizer-BioNTech COVID-19 vaccine on December 11, 2020, increasing population immunity from prior infections, and behavioral changes such as mask wearing, self-quarantining when symptomatic, and improved hand hygiene. Although this analysis is descriptive, the patterns observed provide meaningful insights into epidemic dynamics and reinforce the importance of timely testing, early case identification, and monitoring of hospitalization trends in pandemic response planning. Future analysis could be done by looking at demographic or policy differences, or post-vaccine phases of the pandemic to better understand how testing and clinical outcomes evolved beyond early 2021.
+
+**Another question arise: Does rising case transmission lead to higher hospitalization and hospital burden?**
+
+The phase diagram shows a nonlinear relationship between daily new cases and current hospitalizations. The smooth curve shows that at lower case levels, hospitalizations increase gradually. As cases accelerate (\>100,000 per day), hospitalizations rise sharply, indicating healthcare capacity strain. The curve bends upward during major waves, showing that hospital systems became more burdened as transmission intensified.

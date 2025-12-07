@@ -1,0 +1,28 @@
+project:
+  type: website
+  output-dir: docs      
+
+website:
+  title: "US COVID-19 Testing, Cases, Hospitalizations, and Deaths"
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "Refernce"
+        href: Reference.qmd
+      - text: "About Data"
+        href: Aboutdata.qmd
+  page-footer:
+    left: "PM 566 Final Project"
+    right: "© 2025 Katherine Gong"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    df-print: paged
+    number-sections: false
+    smooth-scroll: true
+editor: visual
+

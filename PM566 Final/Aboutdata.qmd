@@ -1,0 +1,66 @@
+---
+title: "Aboutdata"
+---
+
+**Methods** **Data Acquisition:**
+
+The dataset was downloaded from the COVID Tracking Project (https://covidtracking.com/data/national) and contains one CSV file, and the CSV file was read into R with 420 rows and 17 variables. Each row represents a single day and includes national totals.
+
+**Data Cleaning**
+
+After importing the national COVID-19 dataset, I first inspected the head and tail of the file and observed that the earliest records contained zero or missing values for cases and testing. Although these entries are valid (reflecting the period before COVID-19 testing and confirmed cases existed), they do not contribute meaningful information to the analyses. Therefore, I arranged the data in chronological order and filtered out rows where total test results or positive cases were less than or equal to zero. After this cleaning step, the first recorded COVID-19 case in the U.S. appeared on 2020-01-19—six days after the earliest observation in the file (2020-01-13).
+
+A summary of the dataset revealed that negativeIncrease and hospitalizedIncrease were the only daily variables containing negative values. This is expected because: negativeIncrease = negative_today − negative_yesterday, which can be negative if a state reports fewer negative PCR results on a given day than the day before. hospitalizedIncrease can also be negative if the number of currently hospitalized patients decreases. In contrast, daily increases for positive cases (positiveIncrease) and deaths (deathIncrease) are derived from cumulative totals, which rarely decrease. As a result, these variables tend to have minimum values of zero rather than negative numbers.
+
+To address my primary research question regarding how testing volume relates to cases, hospitalizations, and deaths, I created three new variables: **new_cases (from positiveIncrease)** and **new_tests (from totalTestResultsIncrease)** and **new_deaths (from deathIncrease)**. These variables represent the daily counts of new cases, new tests, and new deaths and form the foundation for all subsequent trend and correlation analyses.
+
+The initial interactive plot of the raw (non-scaled) metrics showed that testing volumes were many times larger than the other indicators, making visual comparisons difficult. To ensure all indicators were comparable on a single plot, I applied a simple normalization transformation: **scaled value = original value/maximum value of that metric**. This scaling procedure places all variables on a 0–1 scale, allowing their patterns and timing to be directly compared. The scaled figure clearly reveals synchronized national wave patterns across new tests, new cases, hospitalizations, and deaths. A correlation matrix further quantifies these relationships and demonstrates how closely these indicators moved together during the first year of the pandemic.
+
+**Tools used**
+
+**tidyverse:** for general data handling, including reading the dataset, cleaning variables, transforming data, and organizing it for analysis. (Includes packages: ggplot2, dplyr, etc.)
+
+**lubridate:** Used for working with dates, such as converting the raw date column into a proper Date format and arranging observations in chronological order.
+
+**plotly:** for interactive visualization, allowing hovering, zooming, and dynamic viewing of trends.
+
+**maps:** for creating choropleth maps to visualize state-level COVID-19 testing, cases, and positivity.
+
+**reshape2:** for reshaping data to create matrix-style visualizations such as heatmaps.
+```{r}
+library(tidyverse)  
+library(lubridate) 
+
+covid19 <- read.csv("/Users/gongxinyu/Downloads/national-history.csv")
+  
+dim(covid19)
+table(covid19$date)
+head(covid19)
+tail(covid19)
+table(covid19$states)
+table(covid19$positive)
+glimpse(covid19)
+summary(covid19)
+```
+
+
+```{r}
+covid <- covid19 %>%
+  mutate(date = as_date(date))%>%
+  arrange(date) %>%
+  filter(totalTestResults > 0 | positive > 0)
+covid <- covid %>%
+  mutate(
+    new_cases = positiveIncrease,
+    new_tests = totalTestResultsIncrease,
+    new_deaths = deathIncrease
+  ) %>%
+  arrange(date)
+covid <- covid %>%
+  filter(
+    !is.na(new_cases),
+    !is.na(new_tests),
+    !is.na(new_deaths)
+  )
+covid
+```

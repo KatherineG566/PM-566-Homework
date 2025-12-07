@@ -1,0 +1,11 @@
+---
+title: "Reference"
+---
+
+-   https://covidtracking.com/data/national
+
+-   https://pmc.ncbi.nlm.nih.gov/articles/PMC10847870/
+
+-   https://www.fda.gov/news-events/press-announcements/fda-approves-first-covid-19-vaccine
+
+-   https://covidtracking.com/data/national
